@@ -49,3 +49,27 @@ Once everything is configured, run the main script:
 ```powershell
 python main.py
 ```
+
+
+# Project Structure
+---
+## 1. "net" folder
+This folder contains files related to the creation of the petri net.
+It includes the files:
+* **create.py**: contains methods to build a petri net using SNAKES library
+
+## 2. "tree" folder
+This folder contains files relative to the logic of building the coverability tree (arbre de couverture)
+It includes the files:
+* **algo.py**: contains the main tree construction logic and steps (karp and miller's algorithm implementation)
+* **export.py**: contains methods to covert the resulting tree to ```.dot``` and image formats
+* **markings.py**: contains methods to compare markings and to handle their changes inclding accelerations using omega (couverture)
+* **matrices.py**: helps in extracting the ```pre``` and ```post``` matrices from a SNAKES petri net
+* **print.py**: contains methods to diplay the algorithm's result on the terminal
+* **transitions.py**: has methods about transitions like checking if one is enabled (franchissable) and firing one (franchir)
+
+## 3. "viz" folder
+This folder is currently just a test file that was used to test using GraphViz library
+
+## 4. main.py
+This is the main part of the project, it contains the construction of a petri net, applying the algorithm on it, printing the result and generating an image of the result
