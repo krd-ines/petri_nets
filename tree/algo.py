@@ -4,7 +4,7 @@ from snakes.nets import PetriNet
 
 from tree.markings import Marking, markings_identical, markings_equal_greater, accelerate, OMEGA
 from tree.matrices import extract_pre_post
-from tree.transaction import enabled, fire
+from tree.transitions import enabled, fire
 
 # ---------------------------------------------------------------------
 # class representing the tree nodes = markings
