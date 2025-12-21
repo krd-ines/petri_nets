@@ -1,60 +1,63 @@
-from snakes.nets import Value, PetriNet, Place, Transition
+from snakes.nets import PetriNet, Place, Transition, Value, MultiArc  # Added MultiArc
 from tree.algo import build_coverability_tree
-from tree.markings import OMEGA
 from tree.print import print_graph
 from tree.export import save_graph_image
 
-
-
+# -------------------------------
+# Example frontend data
+circles = [{'label': 'p0', 'tokens': 2}, {'label': 'p1', 'tokens': 0}]
+squares = [{'label': 't0'}]
+arrows = [
+    {'start_label': 'p0', 'end_label': 't0', 'weight': 1},
+    {'start_label': 't0', 'end_label': 'p1', 'weight': 2}
+]
 
 # -------------------------------
-# build the petri net
-net = PetriNet("example_net")
+# Build the Petri net
+net = PetriNet("frontend_net")
 
-# places
-for pname in ["p1", "p2", "p3", "p4", "p5"]:
-    tokens = 0
-    if pname in ["p2", "p4"]:
-        tokens = 1  # initial marking
-    net.add_place(Place(pname, tokens=tokens))
+# 1. Add places
+for c in circles:
+    count = c.get('tokens', 0)
+    # Create 'count' number of black tokens
+    tokens_list = [Value(1) for _ in range(count)]
+    net.add_place(Place(c['label'], tokens=tokens_list))
 
-# transitions
-for tname in ["t1", "t2", "t3", "t4"]:
-    net.add_transition(Transition(tname))
+# 2. Add transitions
+for s in squares:
+    net.add_transition(Transition(s['label']))
 
-# arcs (pre/post)
-# t1: pre {p1, p3, p4}, post {p2}
-net.add_input("p1", "t1", Value(1))
-net.add_input( "p3", "t1", Value(1))
-net.add_output( "p2", "t1", Value(1))
-net.add_input( "p4", "t1", Value(1))
+# 3. Add arcs (FIXED with MultiArc)
+for a in arrows:
+    start, end = a['start_label'], a['end_label']
+    weight = a.get('weight', 1)
 
-# t2: pre {p2}, post {p1}
-net.add_input("p2", "t2", Value(1))
-net.add_output( "p1", "t2",Value(1))
+    # --- FIX STARTS HERE ---
+    if weight == 1:
+        # Single token
+        arc_val = Value(1)
+    else:
+        # Multiple tokens: Use MultiArc to bundle them
+        # Creates a list like [Value(1), Value(1), ...]
+        arc_val = MultiArc([Value(1) for _ in range(weight)])
+    # --- FIX ENDS HERE ---
 
-# t3: pre {p5}, post {p3, p4}
-net.add_input("p5", "t3", Value(1))
-net.add_output( "p3", "t3", Value(1))
-net.add_output( "p4", "t3", Value(1))
-
-# t4: pre {p4}, post {p5}
-net.add_input("p4", "t4", Value(1))
-net.add_output( "p5", "t4", Value(1))
+    if start.startswith("p") and end.startswith("t"):
+        net.add_input(start, end, arc_val)
+    elif start.startswith("t") and end.startswith("p"):
+        net.add_output(end, start, arc_val)
 
 # -------------------------------
-# initial marking
-initial_marking = {p.name: sum(p.tokens) for p in net.place()}
+# 4. Initial marking
+initial_marking = {p.name: len(p.tokens) for p in net.place()}
 print("Initial marking:", initial_marking)
 
 # -------------------------------
-# coverability tree
-tree = build_coverability_tree(net, initial_marking)
-
-# -------------------------------
-# print tree
-print_graph(tree)
-
-# -------------------------------
-# export to dot
-save_graph_image(tree, "graph")
+# Coverability tree
+try:
+    tree = build_coverability_tree(net, initial_marking)
+    print_graph(tree)
+    save_graph_image(tree, "graph")
+    print("Graph exported successfully as 'graph.png'")
+except Exception as e:
+    print(f"Error building tree: {e}")
