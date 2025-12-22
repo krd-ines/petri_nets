@@ -1,4 +1,4 @@
-from snakes.nets import PetriNet  # type: ignore
+from snakes.nets import PetriNet ,MultiArc  # type: ignore
 
 # ---------------------------------------------------------------------
 # extract pre and post from snakes petri net
@@ -7,14 +7,22 @@ def extract_pre_post(net: PetriNet):
     PRE = {t.name: {} for t in net.transition()}
     POST = {t.name: {} for t in net.transition()}
 
-    # pre
+    # 1. Fill PRE matrix (Inputs)
     for p in net.place():
         for t_name, label in p.post.items():
-            PRE[t_name][p.name] = label.value
+            # If the arc carries multiple tokens (MultiArc)
+            if isinstance(label, MultiArc):
+                PRE[t_name][p.name] = len(label)
+            # If the arc carries one token (Value)
+            else:
+                PRE[t_name][p.name] = label.value
 
-    # post
+    # 2. Fill POST matrix (Outputs)
     for p in net.place():
         for t_name, label in p.pre.items():
-            POST[t_name][p.name] = label.value
+            if isinstance(label, MultiArc):
+                POST[t_name][p.name] = len(label)
+            else:
+                POST[t_name][p.name] = label.value
 
     return PRE, POST
