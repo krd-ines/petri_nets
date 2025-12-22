@@ -2,191 +2,164 @@ from tree.algo import KMGraph
 from tree.markings import OMEGA
 
 # ---------------------------------------------------------------------
-# boundedness (NO PRINTS AS REQUESTED)
-def is_bounded(graph: KMGraph):
-    max_tokens = 0
-    for node in graph.nodes:
-        for v in node.marking.values():
-            if v == OMEGA:
-                return False
-            if v > max_tokens:
-                max_tokens = v
-    return max_tokens
-
+# retrieve all possible transitions
+def _get_transition_names(transitions: set) -> set[str]:
+    # list -> string
+    return {t.name if hasattr(t, "name") else t for t in transitions}
 
 # ---------------------------------------------------------------------
-# quasi-liveness (transition-level)
-def quasi_live_transitions(graph: KMGraph, transitions: set[str]) -> dict[str, bool]:
-    print("[quasi_live_transitions] Checking per-transition quasi-liveness")
-
-    fired = {t: False for t in transitions}
-
-    for edge in graph.edges:
-        print(f"  Transition fired: {edge.transition}")
-        fired[edge.transition] = True
-
-    print("[quasi_live_transitions] Result:", fired)
-    return fired
-
+# retrieve all fired transitions in the graph
+def _get_fired_in_graph(graph: KMGraph) -> set[str]:
+    return {edge.transition for edge in graph.edges}
 
 # ---------------------------------------------------------------------
-# quasi-liveness (net)
-def is_quasi_live(graph: KMGraph, all_transitions: set[str]) -> bool:
-    print("[is_quasi_live] Checking net quasi-liveness")
-
-    fired = {arc.transition for arc in graph.edges}
-
-    print("  Fired transitions:", fired)
-    print("  All transitions:", all_transitions)
-
-    result = fired == all_transitions
-    print("  Quasi-live =", result)
-
-    return result
-
-
-# ---------------------------------------------------------------------
-# resettable
-def is_resettable(graph: KMGraph) -> bool:
-    print("[is_resettable] Checking resettable property")
-
-    root_id = 0
-
-    reverse = {n.id: [] for n in graph.nodes}
-    for e in graph.edges:
-        reverse[e.dst].append(e.src)
-
-    print("  Reverse adjacency:", reverse)
-
-    visited = set()
-    stack = [root_id]
-
-    while stack:
-        n = stack.pop()
-        if n not in visited:
-            print(f"  Visiting node {n}")
-            visited.add(n)
-            stack.extend(reverse[n])
-
-    result = len(visited) == len(graph.nodes)
-    print("  Reachable nodes:", visited)
-    print("  Resettable =", result)
-
-    return result
-
-
-# ---------------------------------------------------------------------
-# detect dead-ends
+# dead-end detection
 def has_deadend(graph: KMGraph) -> bool:
     print("[has_deadend] Checking for dead-end nodes")
-
     for n in graph.nodes:
         print(f"  Node {n.id} tag = {n.tag}")
         if n.tag == "dead-end":
             print("  Dead-end detected")
             return True
-
     print("  No dead-end detected")
     return False
 
+# ---------------------------------------------------------------------
+# boundedness
+def is_bounded(graph: KMGraph):
+    print("\n[STEP 1: Analyse de la Bornetude]")
+    max_tokens = 0
+    for node in graph.nodes:
+        print(f"  > Analyse du Noeud {node.id} (marquage: {node.marking})")
+        for p, v in node.marking.items():
+            if v == OMEGA:
+                print(f"    ! DETECTION : Place '{p}' contient OMEGA. Le réseau est NON-BORNÉ.")
+                return False
+            if v > max_tokens:
+                max_tokens = v
+    print(f"  -> RESULTAT : Réseau borné. Valeur max trouvée : {max_tokens}")
+    return max_tokens
 
 # ---------------------------------------------------------------------
-# adjacency
-def build_children(graph: KMGraph) -> dict[int, list[int]]:
-    print("[build_children] Building adjacency list")
+# quasi-liveness per transition
+def quasi_live_per_transition(graph: KMGraph, transitions: set) -> dict[str, bool]:
+    print("\n[STEP 2: QUASI-VIVACITÉ INDIVIDUELLE]")
+    all_names = _get_transition_names(transitions)
+    fired_names = _get_fired_in_graph(graph)
+    
+    print(f"  > Transitions définies dans le réseau : {all_names}")
+    print(f"  > Transitions observées dans le graphe : {fired_names}")
+    
+    result = {t: (t in fired_names) for t in all_names}
+    for t, status in result.items():
+        print(f"    - {t} : {'[OK] Apparaît dans le graphe' if status else '[KO] JAMAIS activée'}")
+    return result
 
-    children = {n.id: [] for n in graph.nodes}
-    for e in graph.edges:
-        children[e.src].append(e.dst)
-
-    print("  Children map:", children)
-    return children
-
-
-# ---------------------------------------------------------------------
-# subtree transitions
-def compute_subtree_transitions(graph: KMGraph):
-    print("[compute_subtree_transitions] Computing subtree transitions")
-
-    node_transitions = {}
-
-    for n in graph.nodes:
-        print(f"  Starting from node {n.id}")
-        visited = set()
-        node_transitions[n.id] = collect_subtree_transitions_from(
-            graph, n.id, visited
-        )
-        print(f"    Reachable transitions: {node_transitions[n.id]}")
-
-    return node_transitions
-
-
-def collect_subtree_transitions_from(
-    graph: KMGraph,
-    start_node: int,
-    visited: set[int]
-) -> set[str]:
-    print(f"    [collect] Visiting node {start_node}")
-
-    if start_node in visited:
-        print(f"    [collect] Node {start_node} already visited, stopping")
-        return set()
-
-    visited.add(start_node)
-    fired = set()
-
-    for e in graph.edges:
-        if e.src == start_node:
-            print(f"    [collect] Found transition {e.transition} to node {e.dst}")
-            fired.add(e.transition)
-            fired |= collect_subtree_transitions_from(
-                graph, e.dst, visited
-            )
-
-    return fired
-
-
-# ---------------------------------------------------------------------
-# liveness (transition)
-def is_transition_live(transition: str, subtree_transitions: dict[int, set[str]]) -> bool:
-    print(f"[is_transition_live] Checking liveness of transition {transition}")
-
-    for node_id, fired in subtree_transitions.items():
-        print(f"  Node {node_id} can fire {fired}")
-        if transition not in fired:
-            print("  Transition NOT live")
-            return False
-
-    print("  Transition is live")
+# net quasi-liveness
+def is_quasi_live(graph: KMGraph, all_transitions: set) -> bool:
+    print("\n[STEP 3: QUASI-VIVACITÉ GLOBALE]")
+    all_names = _get_transition_names(all_transitions)
+    fired_names = _get_fired_in_graph(graph)
+    
+    missing = all_names - fired_names
+    if missing:
+        print(f"  -> RESULTAT : Faux. Les transitions suivantes bloquent la quasi-vivacité : {missing}")
+        return False
+    print("  -> RESULTAT : Vrai. Chaque transition possède au moins un arc dans le graphe.")
     return True
 
+# ----------------------------------------------------------------------
+# resettable
+def is_resettable(graph: KMGraph) -> bool:
+    print("\n[STEP 4: ANALYSE DE LA RÉINITIALISATION (RETOUR À M0)]")
+    # reverse graph nodes -> root
+    reversed = {n.id: [] for n in graph.nodes}
+    for e in graph.edges:
+        reversed[e.dst].append(e.src)
+    print(f"  > Graphe inverse construit : {reversed}")
 
-# ---------------------------------------------------------------------
-# liveness (net)
-def is_net_live(graph: KMGraph, all_transitions: set[str]) -> bool:
-    print("[is_net_live] Checking net liveness")
+    # passed this node or not
+    visited = set()
+    stack = [0]
+    print("  > Début du parcours inverse depuis le Noeud 0...")
+    
+    while stack:
+        curr = stack.pop()
+        if curr not in visited:
+            print(f"    - Noeud {curr} peut revenir à M0")
+            visited.add(curr)
+            stack.extend(reversed[curr])
+    
+    result = len(visited) == len(graph.nodes)
+    print(f"  > Noeuds connectés à M0 : {len(visited)}/{len(graph.nodes)}")
+    print(f"  -> RESULTAT : Réinitialisable = {result}")
+    return result
 
-    # 1. dead-end
+# ----------------------------------------------------------------------
+# find reachable transitions from each node
+def reachable_transitions(graph: KMGraph) -> dict[int, set[str]]:
+    print("\n[STEP 5: CALCUL DE L'ACCESSIBILITÉ DES TRANSITIONS]")
+    adj = {n.id: [] for n in graph.nodes}
+    for e in graph.edges:
+        adj[e.src].append((e.dst, e.transition))
+
+    node_reachability = {}
+    for start_node in graph.nodes:
+        print(f"  > Exploration depuis Noeud {start_node.id}...")
+        reachable_t = set()
+        stack = [start_node.id]
+        visited_nodes = set()
+        
+        while stack:
+            u = stack.pop()
+            if u not in visited_nodes:
+                visited_nodes.add(u)
+                for v, trans_name in adj[u]:
+                    reachable_t.add(trans_name)
+                    stack.append(v)
+        node_reachability[start_node.id] = reachable_t
+        print(f"    - Transitions atteignables : {reachable_t if reachable_t else 'AUCUNE'}")
+        
+    return node_reachability
+
+# liveness per transition
+def liveness_per_transition(graph: KMGraph, all_transitions: set) -> dict[str, bool]:
+    print("\n[STEP 6: VIVACITÉ PAR TRANSITION (CRITÈRE DE SURVIE)]")
+    all_names = _get_transition_names(all_transitions)
+    reach_map = reachable_transitions(graph)
+    
+    results = {}
+    for t in all_names:
+        print(f"  > Vérification de la survie de {t} :")
+        is_live = True
+        for node_id, reachable in reach_map.items():
+            if t not in reachable:
+                print(f"    ! Échec : {t} est perdue si on atteint le Noeud {node_id}")
+                is_live = False
+                break
+        results[t] = is_live
+        if is_live:
+            print(f"    -> {t} est VIVE (toujours atteignable)")
+            
+    return results
+
+# ----------------------------------------------------------------------
+# net liveness
+def is_net_live(graph: KMGraph, all_transitions: set) -> bool:
+    print("\n[STEP 7: AUDIT FINAL DE VIVACITÉ DU RÉSEAU]")
+    # dead-end
     if has_deadend(graph):
         print("  Net is NOT live (dead-end)")
         return False
 
-    # 2. shortcut
+    # quasi + resettable
     if is_quasi_live(graph, all_transitions) and is_resettable(graph):
         print("  Net is LIVE (quasi-live + resettable)")
         return True
 
-    # 3. full check
-    subtree = compute_subtree_transitions(graph)
-    transitions = {arc.transition for arc in graph.edges}
-
-    for t in transitions:
-        print(f"  Checking transition {t}")
-        for node_id, fired in subtree.items():
-            print(f"    Node {node_id}: {fired}")
-            if t not in fired:
-                print("  Net is NOT live")
-                return False
-
-    print("  Net is LIVE (full check)")
-    return True
+    # per transition liveness
+    t_results = liveness_per_transition(graph, all_transitions)
+    net_live = all(t_results.values())
+    
+    print(f"\n  -> SYNTHÈSE : Le réseau est-il vivant ? {'OUI' if net_live else 'NON'}")
+    return net_live

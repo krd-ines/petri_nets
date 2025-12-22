@@ -37,57 +37,73 @@ def build_coverability_tree(net: PetriNet, M0: Marking) -> KMGraph:
     # new graph
     graph = KMGraph()
 
-    # root node = initial marking = new tag
-    graph.nodes.append(Node(0, M0))
-    # queue to track new markings
+    # root is the first node
+    graph.nodes.append(Node(0, M0, tag="new"))
     queue = [0]  
 
-    # as long as there are new nodes
     while queue:
-        # select marking
         nid = queue.pop(0) 
         node = graph.nodes[nid]
 
-        if node.tag != "new":
+        # old = check if marking was already defined
+        is_old = any(
+            n.id < node.id and markings_identical(n.marking, node.marking) 
+            for n in graph.nodes
+        )
+        
+        if is_old:
+            node.tag = "old"
+            print(f"  [TAG] Noeud {nid} marqué comme 'old' (déjà vu).")
             continue
+        
+        # else done
         node.tag = "done" 
+        
+        # check ancestors for acceleration
+        ancestors_nodes = []
+        current_search = nid
+        while current_search != 0:
+            for e in graph.edges:
+                if e.dst == current_search:
+                    ancestors_nodes.append(graph.nodes[e.src])
+                    current_search = e.src
+                    break
+        ancestors_nodes.append(graph.nodes[0])
 
-        # ancestors = markings from root to current marking
-        ancestors = [
-            graph.nodes[e.src].marking
-            for e in graph.edges
-            if e.dst == nid
-        ]
+        any_enabled = False 
 
-        # check transactions (franchissable?)
         for t in PRE:
             if not enabled(node.marking, PRE[t]): 
                 continue
 
-            # franchir(fire) for new marking
+            any_enabled = True 
             m_prime = fire(node.marking, PRE[t], POST[t])
 
-            # if cover -> accelerate -> omega
-            for m_old in ancestors:
-                if markings_equal_greater(m_prime, m_old) and not markings_identical(m_prime, m_old):
-                    m_prime = accelerate(m_prime, m_old)
+            # acceleration
+            for anc in ancestors_nodes:
+                if markings_equal_greater(m_prime, anc.marking) and not markings_identical(m_prime, anc.marking):
+                    print(f"  [OMEGA] Accélération détectée entre Noeud {nid} et Ancêtre {anc.id}")
+                    m_prime = accelerate(m_prime, anc.marking)
 
-            # check if marking already exists
+            # node existence check
             existing = next(
                 (n for n in graph.nodes if markings_identical(n.marking, m_prime)),
                 None
             )
 
             if existing:
-                # if existing, add arc
                 graph.edges.append(Arc(nid, existing.id, t))
             else:
-                # else add node + arc
                 new_id = len(graph.nodes)
-                graph.nodes.append(Node(new_id, m_prime))
+                # new node
+                graph.nodes.append(Node(new_id, m_prime, tag="new"))
                 graph.edges.append(Arc(nid, new_id, t))
-                # "new" marking
                 queue.append(new_id)  
+
+        # dead-end check
+        if not any_enabled:
+            node.tag = "dead-end"
+            print(f"  [TAG] Noeud {nid} marqué comme 'dead-end' (blocage).")
 
     return graph
 

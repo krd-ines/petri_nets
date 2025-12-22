@@ -15,7 +15,7 @@ def format_marking(marking) -> str:
 def print_nodes(graph: KMGraph):
     print("\nNodes:")
     for n in graph.nodes:
-        print(f"  N{n.id}: {format_marking(n.marking)}")
+        print(f"  N{n.id}: {format_marking(n.marking)} tag='{n.tag}'")
 
 # print transition arcs (src --transition--> dst)
 def print_edges(graph: KMGraph):
