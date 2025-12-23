@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List
 from snakes.nets import PetriNet
-
+import copy
 from tree.markings import Marking, markings_identical, markings_equal_greater, accelerate, OMEGA
 from tree.matrices import extract_pre_post
 from tree.transitions import enabled, fire
@@ -30,22 +30,26 @@ class KMGraph:
     edges: List[Arc] = field(default_factory=list)
 
 # ---------------------------------------------------------------------
-# build the coverability tree
-def build_coverability_tree(net: PetriNet, M0: Marking) -> KMGraph:
+# build the coverability tree with history tracking
+def build_tree_with_history(net: PetriNet, M0: Marking):
     # pre + post matrices
     PRE, POST = extract_pre_post(net)
-    # new graph
     graph = KMGraph()
+    history = [] 
 
-    # root is the first node
-    graph.nodes.append(Node(0, M0, tag="new"))
-    queue = [0]  
+    # new initial node
+    root_node = Node(0, M0, tag="new")
+    graph.nodes.append(root_node)
+    queue = [0]
+    
+    # history message
+    history.append((copy.deepcopy(graph), f"Initial node created with marking {format_marking(M0)}"))
 
     while queue:
         nid = queue.pop(0) 
         node = graph.nodes[nid]
 
-        # old = check if marking was already defined
+        # check if marking already exists
         is_old = any(
             n.id < node.id and markings_identical(n.marking, node.marking) 
             for n in graph.nodes
@@ -53,13 +57,11 @@ def build_coverability_tree(net: PetriNet, M0: Marking) -> KMGraph:
         
         if is_old:
             node.tag = "old"
-            print(f"  [TAG] Noeud {nid} marqué comme 'old' (déjà vu).")
+            # history message
+            history.append((copy.deepcopy(graph), f"Node {nid} {format_marking(node.marking)} is an existing marking. No expansion."))
             continue
         
-        # else done
-        node.tag = "done" 
-        
-        # check ancestors for acceleration
+        # find all ancestor (parent) nodes
         ancestors_nodes = []
         current_search = nid
         while current_search != 0:
@@ -72,42 +74,51 @@ def build_coverability_tree(net: PetriNet, M0: Marking) -> KMGraph:
 
         any_enabled = False 
 
+        # explore all transitions from current marking
         for t in PRE:
             if not enabled(node.marking, PRE[t]): 
                 continue
 
             any_enabled = True 
             m_prime = fire(node.marking, PRE[t], POST[t])
-
-            # acceleration
+            
+            # acceleration check
+            accel_msg = ""
             for anc in ancestors_nodes:
                 if markings_equal_greater(m_prime, anc.marking) and not markings_identical(m_prime, anc.marking):
-                    print(f"  [OMEGA] Accélération détectée entre Noeud {nid} et Ancêtre {anc.id}")
                     m_prime = accelerate(m_prime, anc.marking)
+                    accel_msg = f" (Accelerated with Node {anc.id})"
 
-            # node existence check
-            existing = next(
-                (n for n in graph.nodes if markings_identical(n.marking, m_prime)),
-                None
-            )
+            # ckeck if new marking already exists
+            existing = next((n for n in graph.nodes if markings_identical(n.marking, m_prime)), None)
 
             if existing:
+                # if exists, just add edge
                 graph.edges.append(Arc(nid, existing.id, t))
+                # history message
+                history.append((copy.deepcopy(graph), f"Transition {t} leads to existing marking {format_marking(m_prime)}{accel_msg}"))
             else:
+                # else, create new node and edge
                 new_id = len(graph.nodes)
-                # new node
                 graph.nodes.append(Node(new_id, m_prime, tag="new"))
                 graph.edges.append(Arc(nid, new_id, t))
-                queue.append(new_id)  
+                queue.append(new_id)
+                # history message
+                history.append((copy.deepcopy(graph), f"Fired {t}: Created Node {new_id} with marking {format_marking(m_prime)}{accel_msg}"))
 
-        # dead-end check
-        if not any_enabled:
+        # update node tag based
+        if any_enabled:
+            node.tag = "done"
+            history.append((copy.deepcopy(graph), f"Finished exploring all transitions for Node {nid}."))
+        else:
             node.tag = "dead-end"
-            print(f"  [TAG] Noeud {nid} marqué comme 'dead-end' (blocage).")
+            history.append((copy.deepcopy(graph), f"Node {nid} {format_marking(node.marking)} is a dead-end."))
+    return graph, history
 
-    return graph
-
-
-
-
-
+# ---------------------------------------------------------------------
+# marking -> string
+def format_marking(marking) -> str:
+        return "(" + ",".join(
+        "\u03c9" if v == OMEGA else str(v)
+        for v in marking.values()
+    ) + ")"
