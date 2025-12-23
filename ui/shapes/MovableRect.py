@@ -29,10 +29,12 @@ class MovableRect(QGraphicsRectItem):
         self.label_item.setPos(-lb_rect.width() / 2, -half - lb_rect.height() - 2)
 
     def itemChange(self, change, value):
-        # DETECT MOVEMENT
-        if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
-            # Tell the editor to update arrows connected to this node
-            self.editor.update_arrows(self.label_text)
+        # Use ItemPositionChange for smoother, real-time arrow updates
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
+            # We must use the 'value' (the new position) or call update_arrows
+            # to ensure the geometry re-calculates using the upcoming position.
+            if self.editor:
+                self.editor.update_arrows(self.label_text)
 
         return super().itemChange(change, value)
 

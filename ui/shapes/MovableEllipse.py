@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsTextItem, QGraphicsItem, QInputDialog
-from PyQt6.QtGui import QPen, QBrush
+from PyQt6.QtGui import QPen, QBrush, QFont
+from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtCore import Qt, QRectF
 
 class MovableEllipse(QGraphicsEllipseItem):
@@ -29,8 +30,13 @@ class MovableEllipse(QGraphicsEllipseItem):
         self.label_item.setPos(-lb_rect.width() / 2, -self.radius - lb_rect.height() - 2)
 
     def itemChange(self, change, value):
-        if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
-            self.editor.update_arrows(self.label_text)
+        # Use ItemPositionChange for smoother, real-time arrow updates
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
+            # We must use the 'value' (the new position) or call update_arrows
+            # to ensure the geometry re-calculates using the upcoming position.
+            if self.editor:
+                self.editor.update_arrows(self.label_text)
+
         return super().itemChange(change, value)
 
     def delete(self, scene):
@@ -54,22 +60,43 @@ class MovableEllipse(QGraphicsEllipseItem):
         super().mouseDoubleClickEvent(event)
 
     def set_tokens(self, num):
-        """Update token count and redraw dots"""
-        self.tokens = num
-
-        # remove old dots
-        # Check if items are in a scene before trying to remove them from it
-        if self.scene():
+        """Update token count and trigger a redraw"""
+        # If you still have old child items, remove them one last time
+        if hasattr(self, 'token_items'):
             for dot in self.token_items:
-                self.scene().removeItem(dot)
+                if dot.scene():
+                    dot.scene().removeItem(dot)
+            self.token_items.clear()
+        
+        self.tokens = num
+        self.update()  # This tells Qt to call the paint() method again
 
-        self.token_items.clear()
+    def paint(self, painter, option, widget):
+        # 1. Draw the Ellipse itself (the Place)
+        super().paint(painter, option, widget)
 
-        # draw new dots
-        spacing = 8
-        start_x = -((num-1) * spacing) / 2
-        for i in range(num):
-            dot = QGraphicsEllipseItem(-3, -3, 6, 6, self)
-            dot.setBrush(QBrush(Qt.GlobalColor.black))
-            dot.setPos(start_x + i*spacing, 0)
-            self.token_items.append(dot)
+        # 2. Draw the Content (Dots or Number)
+        painter.setRenderHint(painter.RenderHint.Antialiasing)
+        
+        if 0 < self.tokens <= 5:
+            # NEAT DICE PATTERNS
+            painter.setBrush(QBrush(Qt.GlobalColor.black))
+            dot_r = 3
+            # Coordinates relative to the center (0,0) of the ellipse
+            patterns = {
+                1: [(0, 0)],
+                2: [(-6, 0), (6, 0)],
+                3: [(-6, 5), (6, 5), (0, -5)],
+                4: [(-6, -6), (6, -6), (-6, 6), (6, 6)],
+                5: [(-7, -7), (7, -7), (7, 7), (-7, 7), (0, 0)]
+            }
+            for px, py in patterns[self.tokens]:
+                painter.drawEllipse(QPointF(px, py), dot_r, dot_r)
+        
+        elif self.tokens > 5:
+            # DRAW NUMBER
+            painter.setPen(QPen(Qt.GlobalColor.black))
+            font = QFont("Segoe UI", 11, QFont.Weight.Bold)
+            painter.setFont(font)
+            # Center the number inside the circle
+            painter.drawText(self.boundingRect(), Qt.AlignmentFlag.AlignCenter, str(self.tokens))
