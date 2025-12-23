@@ -1,209 +1,263 @@
-from snakes.nets import PetriNet, Place, Transition, Value, MultiArc  # Added MultiArc
-from tree.algo import build_coverability_tree
-from tree.print import print_graph
-from tree.export import save_graph_image
-from tree.properties import is_bounded, is_quasi_live, is_resettable, is_net_live
-from net.create import create_net
+import sys
+import os
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, 
+                             QVBoxLayout, QHBoxLayout, QLabel, 
+                             QToolBar, QDockWidget, QInputDialog, 
+                             QMessageBox, QListWidget, QTabWidget, QTextEdit, QPushButton)
+from PyQt6.QtGui import QPainter, QPalette, QColor, QAction
+from PyQt6.QtCore import Qt, QSize
 
-# # -------------------------------
-# # Example frontend data
-# circles = [{'label': 'p0', 'tokens': 2}, {'label': 'p1', 'tokens': 0}]
-# squares = [{'label': 't0'}]
-# arrows = [
-#     {'start_label': 'p0', 'end_label': 't0', 'weight': 1},
-#     {'start_label': 't0', 'end_label': 'p1', 'weight': 2}
-# ]
+# --- YOUR PROJECT IMPORTS ---
+from snakes.nets import PetriNet, Place, Transition, Value
+from tree.algo import build_tree_with_history 
+from ui.graph import build_scene_from_graph
+from ui.right_sidebar import AnalysisPanel  
+from ui.toolbar import MainToolbar
 
-# # -------------------------------
-# # Build the Petri net
-# net = PetriNet("frontend_net")
+# --- HER PROJECT IMPORTS ---
+from ui.IconFactory import IconFactory
+from ui.Canvas import PetriNetView
+from ui.ProjectManager import ProjectManager
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QMenu, QFrame, QGroupBox, QScrollArea
 
-# # 1. Add places
-# for c in circles:
-#     count = c.get('tokens', 0)
-#     # Create 'count' number of black tokens
-#     tokens_list = [Value(1) for _ in range(count)]
-#     net.add_place(Place(c['label'], tokens=tokens_list))
-
-# # 2. Add transitions
-# for s in squares:
-#     net.add_transition(Transition(s['label']))
-
-# # 3. Add arcs (FIXED with MultiArc)
-# for a in arrows:
-#     start, end = a['start_label'], a['end_label']
-#     weight = a.get('weight', 1)
-
-#     # --- FIX STARTS HERE ---
-#     if weight == 1:
-#         # Single token
-#         arc_val = Value(1)
-#     else:
-#         # Multiple tokens: Use MultiArc to bundle them
-#         # Creates a list like [Value(1), Value(1), ...]
-#         arc_val = MultiArc([Value(1) for _ in range(weight)])
-#     # --- FIX ENDS HERE ---
-
-#     if start.startswith("p") and end.startswith("t"):
-#         net.add_input(start, end, arc_val)
-#     elif start.startswith("t") and end.startswith("p"):
-#         net.add_output(end, start, arc_val)
-
-# transitions = net.transition()
-
-# # -------------------------------
-# # 4. Initial marking
-# initial_marking = {p.name: len(p.tokens) for p in net.place()}
-# print("Initial marking:", initial_marking)
-
-# # -------------------------------
-# # coverability tree
-# tree = build_coverability_tree(net, initial_marking)
-
-# # -------------------------------
-# # print tree
-# print_graph(tree)
-
-# # -------------------------------
-# # export to dot
-# save_graph_image(tree, "graph")
-
-# print("\nProperties of the net:")
-# print("- Bounded:", False if not is_bounded(tree) else f"True (bound {is_bounded(tree)})")
-# print("- Quasi-live: ", is_quasi_live(tree, transitions))
-# print("- Resettable:", is_resettable(tree))
-# print("- Live:", is_net_live(tree, transitions))
+from PyQt6.QtWidgets import QListWidget, QListWidgetItem
+from ui.left_sidebar import ExplorerPanel
+from tree.matrices import extract_pre_post
+from ui.theme import StyleManager
 
 
 
 
+class PetriNetApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        print("[INIT] Starting Petri Net Architect...")
+        self.setWindowTitle("Petri Net Architect")
+        self.setWindowIcon(IconFactory.create_icon("tree_graph"))
+        self.resize(1500, 900)
+        self.manager = ProjectManager()
+        self.current_filename = None
+        self.init_ui()
+
+
+    def init_ui(self):
+        self.setStyleSheet(StyleManager.get_dock_style())
+        
+        # 1. Central Widget is ONLY the Canvas now
+        # This allows the Canvas to expand into all available space
+        self.canvas = PetriNetView(self)
+        self.setCentralWidget(self.canvas)
+
+        # 2. Setup the existing Left Sidebar
+        #self.setup_left_sidebar()
+
+        # 2. Left Sidebar (Explorer)
+        self.explorer_dock = QDockWidget("Explore", self)
+        self.explorer_sidebar = ExplorerPanel(self.manager)
+        self.explorer_dock.setWidget(self.explorer_sidebar)
+        self._custom_title(self.explorer_dock, "explore", "Explore")
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.explorer_dock)
+
+
+        # 3. Right Sidebar (Analysis)
+        self.analysis_dock = QDockWidget("Coverability Tree", self)
+        self.analysis_sidebar = AnalysisPanel()
+        self.analysis_dock.setWidget(self.analysis_sidebar)
+        self._custom_title(self.analysis_dock, "tree_graph", "Coverability Tree")
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.analysis_dock)
+
+
+        # 4. Setup Toolbar
+        self.toolbar = MainToolbar(self)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.toolbar)
+        self.setup_connections()
+        self.explorer_sidebar.refresh_file_list()
+        
+
+    def setup_connections(self):
+        # Connecting Explorer to Main Logic
+        self.explorer_sidebar.proj_list.itemDoubleClicked.connect(self.load_project)
+        self.explorer_sidebar.proj_list.customContextMenuRequested.connect(self.show_context_menu)
+        
+        # Connecting Analysis to Main Logic
+        self.analysis_sidebar.btn_full.clicked.connect(self.run_full_analysis)
+        self.analysis_sidebar.btn_step_init.clicked.connect(self.run_step_init)
+
+        # File Actions
+        self.toolbar.new_act.triggered.connect(self.new_project)
+        self.toolbar.save_act.triggered.connect(self.save_project)
+
+        # Mode Actions
+        self.toolbar.place_act.triggered.connect(lambda: self.set_mode("circle"))
+        self.toolbar.trans_act.triggered.connect(lambda: self.set_mode("square"))
+        self.toolbar.arc_act.triggered.connect(lambda: self.set_mode("arrow"))
+        self.toolbar.erase_act.triggered.connect(lambda: self.set_mode("erase"))
+        self.toolbar.select_act.triggered.connect(lambda: self.set_mode(None))
+
+
+    def _custom_title(self, dock, icon, text):
+        title = QWidget()
+        lay = QHBoxLayout(title)
+        lay.setContentsMargins(8,4,8,4)
+        lbl_icon = QLabel(); lbl_icon.setPixmap(IconFactory.create_icon(icon).pixmap(25,25))
+        lbl_text = QLabel(text); lbl_text.setStyleSheet("font-weight: bold; font-size: 14px;")
+        lay.addWidget(lbl_icon); lay.addWidget(lbl_text); lay.addStretch()
+        dock.setTitleBarWidget(title)
+
+
+    def show_context_menu(self, pos):
+        item = self.explorer_sidebar.proj_list.itemAt(pos)
+        if item:
+            menu = QMenu()
+            delete_action = menu.addAction("Delete Project")
+            delete_action.triggered.connect(self.delete_selected_project)
+            menu.exec(self.explorer_sidebar.proj_list.mapToGlobal(pos))
+
+
+    def run_full_analysis(self):
+        print("[ACTION] Running Full Analysis...")
+        """Coordination: Get data from Canvas -> Pass to Analysis Panel."""
+        net, m0 = self.canvas.get_snakes_net() # Clean export
+        
+        if hasattr(self.analysis_sidebar, 'view') and self.analysis_sidebar.view.scene():
+            self.analysis_sidebar.view.scene().clear()
+
+        self.analysis_sidebar.set_net_data(net, m0)
+        self.analysis_sidebar.run_full()
+
+    def run_step_init(self):
+        print("[ACTION] Initializing Stepper...")
+        if hasattr(self.analysis_sidebar, 'view'):
+            if self.analysis_sidebar.view.scene():
+                self.analysis_sidebar.view.scene().clear()
+
+        net, m0 = self.canvas.get_snakes_net()
+        self.analysis_sidebar.set_net_data(net, m0)
+        self.analysis_sidebar.run_step_init() 
+
+    # ========================== HER LOGIC ==========================
+
+    def set_mode(self, mode):
+        self.canvas.set_mode(mode)
+        # Tell the toolbar to update its UI state
+        self.toolbar.update_mode_checks(mode)
+
+
+    def update_stats(self):
+        """The bridge between the Canvas, the Logic, and the Sidebar."""
+        # 1. Scrape the canvas to get a formal Snakes PetriNet
+        net, m0 = self.canvas.get_snakes_net()
+        
+        # 2. Use the external utility for math
+        pre, post = extract_pre_post(net)
+        
+        # 3. Get arc count directly from canvas for the badge
+        arc_count = len(self.canvas.arrows)
+        
+        # 4. Hand everything to the sidebar to handle display
+        self.explorer_sidebar.update_content(net, pre, post, arc_count)
+
+    # Add this to PetriNetApp in mainpanel.py
+    def update_arrows(self, label):
+        """
+        Required by MovableEllipse and MovableRect to update 
+        arrow positions when shapes are moved.
+        """
+        if hasattr(self, 'canvas'):
+            self.canvas.update_arrows(label)
+
+
+    def load_project(self, item):
+        """Triggered by double-clicking a file in the sidebar."""
+        actual_filename = item.data(Qt.ItemDataRole.UserRole)
+        
+        # Manager handles the file read, Canvas handles the drawing
+        if self.manager.load_file(actual_filename, self.canvas, self):
+            self.canvas.center_on_items()
+            self.update_stats()
+
+    def new_project(self):
+        confirm = QMessageBox.question(self, "New", "Clear Canvas?", 
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        
+        if confirm == QMessageBox.StandardButton.Yes:
+            # 1. Clear Data
+            self.canvas.clear_all()
+            self.manager.reset_session()
+            
+            # 2. Clear Analysis UI
+            if hasattr(self, 'analysis_sidebar'):
+                if self.analysis_sidebar.view.scene():
+                    self.analysis_sidebar.view.scene().clear()
+            
+            # 3. Update Visuals
+            self.update_stats()
+
+    def save_project(self):
+        # Use the manager's state
+        name = self.manager.current_filename
+        
+        if not name:
+            name, ok = QInputDialog.getText(self, "Save", "Project Name:")
+            if not (ok and name): return
+        
+        # Manager handles extraction and writing
+        self.manager.save_file(name, self.canvas)
+        self.explorer_sidebar.refresh_file_list()
 
 
 
+    def delete_selected_project(self):
+        item = self.explorer_sidebar.proj_list.currentItem()
+        if not item: return
+
+        actual_filename = item.data(Qt.ItemDataRole.UserRole)
+        display_name = item.text().replace("📄  ", "").strip()
+        
+        confirm = QMessageBox.question(self, "Confirm Delete", 
+                                    f"Delete '{display_name}'?",
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+        if confirm == QMessageBox.StandardButton.Yes:
+            # 1. Tell manager to delete from disk
+            if self.manager.delete_file(actual_filename):
+                # 2. Update Sidebar list
+                self.explorer_sidebar.refresh_file_list()
+                
+                # 3. If it was the open file, clear the canvas
+                if self.manager.current_filename == display_name:
+                    self.canvas.clear_all()
+                    self.manager.reset_session()
+                    self.update_stats()
 
 
+    def create_label_with_icon(self, icon_name, text, icon_size=20):
+        """Helper to create a label with an icon"""
+        label = QLabel()
+        icon = IconFactory.create_icon(icon_name)
+        pixmap = icon.pixmap(QSize(icon_size, icon_size))
+        label.setPixmap(pixmap)
+        label.setText(f"  {text}")
+        label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        return label
 
-# ----------------------------------------
-# another example
-print("\n--- Another example net ---\n")
-net_simple = create_net("simple_net")
 
-# Places with initial tokens
-for pname in ["p1", "p2", "p3"]:
-    tokens = 0
-    if pname == "p1":
-        tokens = 1  # initial marking
-    net_simple.add_place(Place(pname, tokens=tokens))
-
-# Transitions
-for tname in ["t1", "t2", "t3"]:
-    net_simple.add_transition(Transition(tname))
-
-# Arcs
-
-# t1: p1 -> p2
-net_simple.add_input("p1", "t1", Value(1))
-net_simple.add_output("p2", "t1", Value(1))
-
-# t2: p2 -> p3
-net_simple.add_input("p2", "t2", Value(1))
-net_simple.add_output("p3", "t2", Value(1))
-
-# t3: p3 -> p1
-net_simple.add_input("p3", "t3", Value(1))
-net_simple.add_output("p1", "t3", Value(1))
-
-transitions = net_simple.transition()
-
-# -------------------------------
-# initial marking
-initial_marking = {p.name: sum(p.tokens) for p in net_simple.place()}
-print("Initial marking:", initial_marking)
-
-# -------------------------------
-# coverability tree
-tree = build_coverability_tree(net_simple, initial_marking)
-
-# -------------------------------
-# print tree
-print_graph(tree)
-
-# -------------------------------
-# export to dot
-save_graph_image(tree, "graph2")
-
-print("\nProperties of the net:")
-bound = is_bounded(tree)
-print("- Bounded:", False if not bound else f"True (bound {bound})")
-print("- Quasi-live: ", is_quasi_live(tree, transitions))
-print("- Resettable:", is_resettable(tree))
-print("- Live:", is_net_live(tree, transitions))
-# # Coverability tree
-# try:
-#     tree = build_coverability_tree(net, initial_marking)
-#     print_graph(tree)
-#     save_graph_image(tree, "graph")
-#     print("Graph exported successfully as 'graph.png'")
-# except Exception as e:
-#     print(f"Error building tree: {e}")
-
-# net = PetriNet("example_net_5_places")
-
-# # Places
-# for pname in ["p1", "p2", "p3", "p4", "p5"]:
-#     tokens = 0
-#     if pname in ["p2", "p4"]:
-#         tokens = 1   # initial marking
-#     net.add_place(Place(pname, tokens=tokens))
-
-# # Transitions
-# for tname in ["t1", "t2", "t3", "t4"]:
-#     net.add_transition(Transition(tname))
-
-# # -----------------------------
-# # Arcs
-# # -----------------------------
-
-# # t1: p1 + p3 + p4 -> p2
-# net.add_input("p1", "t1", Value(1))
-# net.add_input("p3", "t1", Value(1))
-# net.add_input("p4", "t1", Value(1))
-# net.add_output("p2", "t1", Value(1))
-
-# # t2: p2 -> p1
-# net.add_input("p2", "t2", Value(1))
-# net.add_output("p1", "t2", Value(1))
-
-# # t3: p5 -> p3 + p4
-# net.add_input("p5", "t3", Value(1))
-# net.add_output("p3", "t3", Value(1))
-# net.add_output("p4", "t3", Value(1))
-
-# # t4: p4 -> p5
-# net.add_input("p4", "t4", Value(1))
-# net.add_output("p5", "t4", Value(1))
-
-# transitions = net.transition()
-
-# # -------------------------------
-# # initial marking
-# initial_marking = {p.name: sum(p.tokens) for p in net.place()}
-# print("Initial marking:", initial_marking)
-
-# # -------------------------------
-# # coverability tree
-# tree = build_coverability_tree(net, initial_marking)
-
-# # -------------------------------
-# # print tree
-# print_graph(tree)
-
-# # -------------------------------
-# # export to dot
-# save_graph_image(tree, "graph")
-
-# print("\nProperties of the net:")
-# print("- Bounded:", False if not is_bounded(tree) else f"True (bound {is_bounded(tree)})")
-# print("- Quasi-live: ", is_quasi_live(tree, transitions))
-# print("- Resettable:", is_resettable(tree))
-# print("- Live:", is_net_live(tree, transitions))
+if __name__ == "__main__":
+    import sys
+    if sys.platform == "win32":
+        try:
+            from ctypes import windll
+            myappid = 'mycompany.petrinet.architect.1.0'  # arbitrary string
+            windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        except:
+            pass
+    
+    app = QApplication(sys.argv)
+   
+    
+    # Fix the icon: No .pixmap() call!
+    app.setWindowIcon(IconFactory.create_icon("app_icon"))
+    StyleManager.apply_light_theme(app)
+    window = PetriNetApp()
+    window.showMaximized()
+    sys.exit(app.exec())
