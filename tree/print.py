@@ -1,15 +1,5 @@
-
-from tree.algo import KMGraph
+from tree.algo import KMGraph, format_marking
 from tree.markings import OMEGA
-
-
-# ---------------------------------------------------------------------
-# marking -> string
-def format_marking(marking) -> str:
-        return "(" + ",".join(
-        OMEGA if v == OMEGA else str(v)
-        for v in marking.values()
-    ) + ")"
 
 # print nodes + maekings
 def print_nodes(graph: KMGraph):
