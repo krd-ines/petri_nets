@@ -137,7 +137,7 @@ class HelpDialog(QDialog):
             <tr>
                 <td align="center">{icon_arc}</td>
                 <td><b>Arc:</b> Connect nodes. 
-                    <br><span style="color:#7f8c8d; font-size:12px;">(Right click Source &rarr; Right click Destination)</span>
+                    <br><span style="color:#7f8c8d; font-size:12px;">(Click Source &rarr; Right click Destination)</span>
                 </td>
             </tr>
             <tr>
@@ -152,42 +152,47 @@ class HelpDialog(QDialog):
 
         <h3>2. Shortcuts & Editing</h3>
         <ul>
-            <li><b>Edit Tokens:</b> Double-click a <span class="key">Place</span> to set number.</li>
+            <li><b>Edit Tokens:</b> Double-click a <span class="key">Place</span> to set number of tokens.</li>
             <li><b>Edit Weight:</b> Double-click an <span class="key">Arc</span> to set weight.</li>
             <li><b>Move Nodes:</b> Select {icon_stop} <b>Stop</b>, then drag.</li>
             <li><b>Zoom:</b> Use <span class="key">Mouse Wheel</span>.</li>
         </ul>
 
         <h3>3. Analysis Results</h3>
-        <p>Running analysis ( {icon_tree} ) generates this graph legend:</p>
+        <p>"Full Build" and "Step Build" buttons generate a coverability tree graph that follows this legend:</p>
         
         <table border="0" cellspacing="4">
             <tr>
                 <td width="20" align="center">{img_new}</td>
-                <td><b>New Marking:</b> A newly discovered state.</td>
+                <td><b>New Marking:</b> A newly discovered marking that still needs to be explored.</td>
             </tr>
             <tr>
                 <td align="center">{img_done}</td>
-                <td><b>Done Marking:</b> A duplicate state (already found).</td>
+                <td><b>Done Marking:</b> A marking already fully explored.</td>
             </tr>
             <tr>
                 <td align="center">{img_dead}</td>
-                <td><b>Dead-End:</b> A deadlock state (no moves left).</td>
+                <td><b>Dead-End:</b> A marking where no more exploring is possible.</td>
             </tr>
         </table>
 
         <h3>4. Properties Defined</h3>
         
-        <p><span class="prop-name">Bounded:</span> Are states finite?
+        <p><span class="prop-name">Bounded:</span> Is the graph finite?
         <br>&nbsp;• <b style="color:#27ae60">YES:</b> Tokens never reach infinity.
         <br>&nbsp;• <b style="color:#c0392b">NO:</b> Infinite growth.</p>
 
-        <p><span class="prop-name">Live:</span> Is it always active?
-        <br>&nbsp;• <b style="color:#27ae60">YES:</b> Transitions can always fire eventually.
-        <br>&nbsp;• <b style="color:#c0392b">NO:</b> Can get stuck/dead.</p>
+        <p><span class="prop-name">Quasi-Live:</span> Is the graph quasi-live?
+        <br>&nbsp;• <b style="color:#27ae60">YES:</b> All transitions can fire eventually from at least one marking.
+        <br>&nbsp;• <b style="color:#c0392b">NO:</b> Some transitions are not fired at all.</p>
 
-        <p><span class="prop-name">Reversible:</span> Can it reset?
-        <br>&nbsp;• <b style="color:#27ae60">YES:</b> Can always return to start (M0).</p>
+        <p><span class="prop-name">Live:</span> Is the graph live?
+        <br>&nbsp;• <b style="color:#27ae60">YES:</b> Transitions can always fire from any marking.
+        <br>&nbsp;• <b style="color:#c0392b">NO:</b> It can get stuck/dead-end.</p>
+
+        <p><span class="prop-name">Reversible:</span> Can the graph be reset?
+        <br>&nbsp;• <b style="color:#27ae60">YES:</b> It can always return to start marking.</p>
+        <br>&nbsp;• <b style="color:#c0392b">NO:</b> It cannot always return to start marking.</p>
         """
 
         self.browser = QTextBrowser()

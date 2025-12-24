@@ -174,7 +174,8 @@ class PetriNetApp(QMainWindow):
 
         # 4. Hand everything to the sidebar to handle display
         self.explorer_sidebar.update_content(net, pre, post, arc_count)
-
+    
+           
     # Add this to PetriNetApp in mainpanel.py
     def update_arrows(self, label):
         """
@@ -262,6 +263,16 @@ class PetriNetApp(QMainWindow):
         from ui.help_dialog import HelpDialog  # Import locally to avoid circular imports if needed
         dialog = HelpDialog(self)
         dialog.exec()
+    
+    # Inside your PetriNetApp class
+    def show_error(self, title, message):
+        """Global error handler for the application."""
+        from PyQt6.QtWidgets import QMessageBox
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Icon.Critical)
+        msg.setWindowTitle(title)
+        msg.setText(message)
+        msg.exec()
 
 
 if __name__ == "__main__":

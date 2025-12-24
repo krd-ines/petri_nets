@@ -13,6 +13,59 @@ from tree.algo import build_tree_with_history
 from ui.graph import build_scene_from_graph
 from tree.properties import is_bounded, is_net_live, is_resettable, is_quasi_live
 
+class FullGraphWindow(QDialog):
+    """A pop-up window to view the graph in high resolution/full screen."""
+    def __init__(self, scene, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Full Tree View")
+        self.setMinimumSize(1000, 700)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.view = QGraphicsView(scene)
+        self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.view.setStyleSheet("background-color: white; border: none;")
+        layout.addWidget(self.view)
+
+        hint = QLabel("Use Mouse Wheel to Zoom • Click and Drag to Pan")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hint.setStyleSheet("color: #888; padding: 5px; background: #f9f9f9;")
+        layout.addWidget(hint)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.apply_scaling_rules()
+
+    def apply_scaling_rules(self):
+        if not self.view.scene(): return
+        scene = self.view.scene()
+        rect = scene.itemsBoundingRect()
+        if not rect.isNull():
+            rect.adjust(-60, -60, 60, 60)
+            scene.setSceneRect(rect)
+            self.view.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+            if self.view.transform().m11() > 1.0:
+                self.view.resetTransform()
+            self.view.centerOn(rect.center())
+
+    def wheelEvent(self, event):
+        zoom_in = 1.2
+        zoom_out = 1 / zoom_in
+        current_scale = self.view.transform().m11()
+        
+        if event.angleDelta().y() > 0: # Zoom In
+            if current_scale < 10.0:
+                self.view.scale(zoom_in, zoom_in)
+        else: # Zoom Out
+            if current_scale > 0.15: # Minimum limit for full window
+                self.view.scale(zoom_out, zoom_out)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.apply_scaling_rules()
+
 class AnalysisPanel(QFrame):
     """The main sidebar panel for Petri Net tree analysis."""
     def __init__(self, parent=None):
@@ -46,8 +99,9 @@ class AnalysisPanel(QFrame):
         self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.view.setStyleSheet("background-color: white; border: 1px solid #dee2e6; border-radius: 4px;")
-
-        # Height set to 250 as requested
+        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.view.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.view.setMinimumHeight(250)
         left_col.addWidget(self.view, stretch=10)
 
@@ -228,13 +282,30 @@ class AnalysisPanel(QFrame):
         self.btn_step_init.clicked.connect(self.run_step_init)
         self.btn_next.clicked.connect(self.go_next)
         self.btn_prev.clicked.connect(self.go_back)
-        self.btn_zoom_in.clicked.connect(lambda: self.view.scale(1.2, 1.2))
-        self.btn_zoom_out.clicked.connect(lambda: self.view.scale(1/1.2, 1/1.2))
+        self.btn_zoom_in.clicked.connect(self.zoom_in)
+        self.btn_zoom_out.clicked.connect(self.zoom_out)
         self.btn_zoom_reset.clicked.connect(self.reset_view)
         self.btn_maximize.clicked.connect(self.open_full_view)
         self.btn_save_img.clicked.connect(self.save_graph_as_image)
 
     # --- LOGIC METHODS ---
+    def zoom_in(self):
+        # Maximum zoom limit (e.g., 5.0 = 500%)
+        if self.view.transform().m11() < 5.0:
+            self.view.scale(1.2, 1.2)
+
+    def zoom_out(self):
+        # MINIMUM ZOOM LIMIT: 0.2 means 20% of original size
+        # This prevents the graph from disappearing
+        min_scale = 0.2
+        
+        current_scale = self.view.transform().m11()
+        
+        if current_scale > min_scale:
+            self.view.scale(1/1.2, 1/1.2)
+        # else:
+        #     self.editor.statusBar().showMessage("Minimum zoom reached.")
+
 
     def set_net_data(self, net, m0):
         self.net = net
@@ -270,7 +341,8 @@ class AnalysisPanel(QFrame):
 
         rect = scene.itemsBoundingRect()
         if not rect.isNull():
-            rect.adjust(-100, -100, 100, 100)
+            padding = 150
+            rect.adjust(-padding, -padding, padding, padding)
             scene.setSceneRect(rect)
             self.view.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
             if self.view.transform().m11() > 1.0: self.view.resetTransform()

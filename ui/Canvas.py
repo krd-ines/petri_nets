@@ -64,6 +64,7 @@ class PetriNetView(QGraphicsView):
         elif self.current_mode == "square" and event.button() == Qt.MouseButton.LeftButton:
             self._add_transition(pos)
         elif self.current_mode == "arrow":
+            
             self._handle_arrow_creation(pos, event.button())
         elif self.current_mode == "erase" and event.button() == Qt.MouseButton.LeftButton:
             self._handle_erasing(pos)
@@ -107,6 +108,13 @@ class PetriNetView(QGraphicsView):
         # If we didn't handle it, let the default behavior happen
         super().mouseDoubleClickEvent(event)
 
+    def is_connection_duplicate(self, start_label, end_label):
+        for arrow_dict in self.arrows:
+            # Check if the labels match the keys in your dictionary
+            if arrow_dict["start_label"] == start_label and arrow_dict["end_label"] == end_label:
+                return True
+        return False
+
     # --- Internal Helpers ---
     def _add_place(self, pos):
         lbl = f"p{self.circle_count}"
@@ -137,6 +145,15 @@ class PetriNetView(QGraphicsView):
             s_lbl = self.start_item.label_text
             e_lbl = item.label_text
 
+            if self.is_connection_duplicate(s_lbl, e_lbl):
+                if self.editor:
+                    self.editor.show_error(
+                        "Duplicate Arc", 
+                        f"A connection already exists from {s_lbl} to {e_lbl}."
+                    )
+                self.start_item = None # Reset selection
+                return
+            
             bend = 0
             # Check for reverse arrow
             for a_entry in self.arrows:
