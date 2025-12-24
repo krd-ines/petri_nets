@@ -148,7 +148,7 @@ class AnalysisPanel(QFrame):
         self._setup_action_buttons(right_col)
         self._setup_toolbar(right_col)
         self._setup_properties_panel(right_col)
-        self._setup_legend_panel(right_col)
+        #self._setup_legend_panel(right_col)
         
         right_col.addStretch(1) 
         self.main_layout.addLayout(right_col)
