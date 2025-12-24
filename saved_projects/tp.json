@@ -1,0 +1,124 @@
+{
+    "places": [
+        {
+            "label": "p0",
+            "x": 295.0,
+            "y": -258.0,
+            "tokens": 0
+        },
+        {
+            "label": "p1",
+            "x": 31.0,
+            "y": -247.0,
+            "tokens": 10
+        },
+        {
+            "label": "p2",
+            "x": 369.0,
+            "y": -31.0,
+            "tokens": 0
+        },
+        {
+            "label": "p3",
+            "x": 61.0,
+            "y": -35.0,
+            "tokens": 0
+        },
+        {
+            "label": "p4",
+            "x": 202.0,
+            "y": 105.0,
+            "tokens": 0
+        }
+    ],
+    "transitions": [
+        {
+            "label": "t0",
+            "x": 178.0,
+            "y": -286.0
+        },
+        {
+            "label": "t1",
+            "x": 190.0,
+            "y": -157.0
+        },
+        {
+            "label": "t2",
+            "x": 327.0,
+            "y": 33.0
+        },
+        {
+            "label": "t3",
+            "x": 101.0,
+            "y": 42.0
+        }
+    ],
+    "arcs": [
+        {
+            "start": "p1",
+            "end": "t0",
+            "weight": 1,
+            "bend_factor": 0
+        },
+        {
+            "start": "t0",
+            "end": "p0",
+            "weight": 1,
+            "bend_factor": 0
+        },
+        {
+            "start": "p0",
+            "end": "t1",
+            "weight": 1,
+            "bend_factor": 0
+        },
+        {
+            "start": "t1",
+            "end": "p1",
+            "weight": 1,
+            "bend_factor": 0
+        },
+        {
+            "start": "p3",
+            "end": "t1",
+            "weight": 1,
+            "bend_factor": 0
+        },
+        {
+            "start": "t2",
+            "end": "p3",
+            "weight": 1,
+            "bend_factor": 0
+        },
+        {
+            "start": "t2",
+            "end": "p2",
+            "weight": 1,
+            "bend_factor": 0
+        },
+        {
+            "start": "p2",
+            "end": "t1",
+            "weight": 1,
+            "bend_factor": 0
+        },
+        {
+            "start": "p4",
+            "end": "t2",
+            "weight": 1,
+            "bend_factor": 0
+        },
+        {
+            "start": "t3",
+            "end": "p4",
+            "weight": 1,
+            "bend_factor": 0
+        },
+        {
+            "start": "p3",
+            "end": "t3",
+            "weight": 1,
+            "bend_factor": 0
+        }
+    ]
+}

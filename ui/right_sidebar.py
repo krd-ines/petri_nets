@@ -13,53 +13,6 @@ from tree.algo import build_tree_with_history
 from ui.graph import build_scene_from_graph
 from tree.properties import is_bounded, is_net_live, is_resettable, is_quasi_live
 
-class FullGraphWindow(QDialog):
-    """A pop-up window to view the graph in high resolution/full screen."""
-    def __init__(self, scene, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Full Tree View")
-        self.setMinimumSize(1000, 700)
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        self.view = QGraphicsView(scene)
-        self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
-        self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
-        self.view.setStyleSheet("background-color: white; border: none;")
-        layout.addWidget(self.view)
-        
-        hint = QLabel("Use Mouse Wheel to Zoom • Click and Drag to Pan")
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint.setStyleSheet("color: #888; padding: 5px; background: #f9f9f9;")
-        layout.addWidget(hint)
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.apply_scaling_rules()
-
-    def apply_scaling_rules(self):
-        if not self.view.scene(): return
-        scene = self.view.scene()
-        rect = scene.itemsBoundingRect()
-        if not rect.isNull():
-            rect.adjust(-60, -60, 60, 60)
-            scene.setSceneRect(rect)
-            self.view.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
-            if self.view.transform().m11() > 1.0:
-                self.view.resetTransform()
-            self.view.centerOn(rect.center())
-
-    def wheelEvent(self, event):
-        zoom_in = 1.2
-        zoom_out = 1 / zoom_in
-        factor = zoom_in if event.angleDelta().y() > 0 else zoom_out
-        self.view.scale(factor, factor)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.apply_scaling_rules()
-
 class AnalysisPanel(QFrame):
     """The main sidebar panel for Petri Net tree analysis."""
     def __init__(self, parent=None):
@@ -127,12 +80,12 @@ class AnalysisPanel(QFrame):
         step_layout.addWidget(self.step_text)
         
         left_col.addWidget(step_container)
-        self.main_layout.addLayout(left_col, stretch=3)
+        self.main_layout.addLayout(left_col)
 
     def setup_right_column(self):
         """Setup for control buttons, properties, and legend."""
         right_col = QVBoxLayout()
-        right_col.setSpacing(15)
+        #right_col.setSpacing(10)
 
         self._setup_action_buttons(right_col)
         self._setup_toolbar(right_col)
@@ -140,7 +93,7 @@ class AnalysisPanel(QFrame):
         self._setup_legend_panel(right_col)
         
         right_col.addStretch(1) 
-        self.main_layout.addLayout(right_col, stretch=0)
+        self.main_layout.addLayout(right_col)
 
     def _setup_action_buttons(self, layout):
         base = "QPushButton { font-weight: bold; border-radius: 8px; padding: 10px; color: white; }"
