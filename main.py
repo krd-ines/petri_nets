@@ -32,12 +32,28 @@ class PetriNetApp(QMainWindow):
     def __init__(self):
         super().__init__()
         print("[INIT] Starting Petri Net Architect...")
+        self.ajuster_taille_ecran()
         self.setWindowTitle("Petri Net Architect")
         self.setWindowIcon(IconFactory.create_icon("tree_graph"))
-        self.resize(1500, 900)
         self.manager = ProjectManager()
         self.current_filename = None
         self.init_ui()
+
+    def ajuster_taille_ecran(self):
+        ecran = QApplication.primaryScreen()
+        geo = ecran.availableGeometry() # Exclut déjà la barre des tâches Windows
+        
+        # On prend 90% de l'écran
+        largeur = int(geo.width() * 0.9)
+        # On retire 30 pixels supplémentaires pour la StatusBar
+        hauteur = int(geo.height() * 0.9) - 30 
+        
+        self.resize(largeur, hauteur)
+        
+        # On centre par rapport à la zone disponible (geo.y() évite le décalage)
+        x = geo.x() + (geo.width() - largeur) // 2
+        y = geo.y() + (geo.height() - hauteur) // 2
+        self.move(x, y)
 
 
     def init_ui(self):
@@ -72,6 +88,10 @@ class PetriNetApp(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.toolbar)
         self.setup_connections()
         self.explorer_sidebar.refresh_file_list()
+
+        status_bar = self.statusBar()
+        status_bar.setFixedHeight(25) # Taille standard propre
+        status_bar.setSizeGripEnabled(False)
         
 
     def setup_connections(self):
@@ -259,5 +279,5 @@ if __name__ == "__main__":
     app.setWindowIcon(IconFactory.create_icon("app_icon"))
     StyleManager.apply_light_theme(app)
     window = PetriNetApp()
-    window.showMaximized()
+    window.show()
     sys.exit(app.exec())
